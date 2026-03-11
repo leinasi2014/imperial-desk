@@ -1,4 +1,4 @@
-use web_llm_core::ProviderDefinition;
+use imperial_desk_core::ProviderDefinition;
 
 use crate::providers::deepseek;
 

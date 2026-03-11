@@ -5,10 +5,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use imperial_desk_core::{Result, WebLlmError};
 use serde::{Deserialize, Serialize};
-use web_llm_core::{Result, WebLlmError};
 
-const APP_DIR_NAME: &str = "web-llm-adapter-rust";
+const APP_DIR_NAME: &str = "imperial-desk";
 
 #[derive(Debug, Clone)]
 pub struct StatePaths {

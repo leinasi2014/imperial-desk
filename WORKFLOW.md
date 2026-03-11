@@ -75,6 +75,30 @@ Plane 项目内的内容统一使用中文：
 
 代码符号、crate 名称、命令、路径等保留原文。
 
+## 负责人接管流程
+
+本项目采用“两层负责人”机制：
+
+1. Plane 负责人
+2. 执行负责人
+
+定义如下：
+
+- Plane 负责人
+  - 指 Plane 项目中的人类账号负责人
+  - 负责项目所有权、issue 状态、workpad、验收与最终关闭
+- 执行负责人
+  - 指由主 agent 创建的子代理
+  - 负责接管单个开发 issue 的实际实现、局部验证和进度回报
+
+规则：
+
+1. Plane 中不能依赖虚拟成员，因此项目负责人默认挂在人类账号下。
+2. 一旦某个 `Todo` issue 进入真实开发，主 agent 应创建一个子代理作为该 issue 的执行负责人。
+3. 一个活跃开发 issue 默认只对应一个执行负责人，避免职责漂移。
+4. 如果需要并行拆分，主 agent 可以创建多个子代理，但每个子代理必须有明确且不重叠的文件或模块边界。
+5. Plane 的状态更新、workpad 维护和最终结项仍由主 agent 负责，不由子代理直接承担。
+
 ## 标准执行流程
 
 ### Step 0: 同步上下文
@@ -101,17 +125,35 @@ Plane 项目内的内容统一使用中文：
 2. 按能力拆分，不按文件名拆分。
 3. 发现明显超出当前 issue 的工作时，新增 follow-up issue，而不是静默扩 scope。
 
+### Step 1.5: 指派执行负责人
+
+进入开发前，主 agent 需要做一次明确交接：
+
+1. 确认该 issue 是否已经进入实现阶段。
+2. 若是，实现开始前创建一个子代理作为执行负责人。
+3. 给子代理明确以下内容：
+   - 对应的 Plane issue
+   - 本次范围
+   - 可写文件或模块边界
+   - 最低验证要求
+4. 在主 agent 侧保留对子代理输出的最终审阅权。
+
 ### Step 2: 实现
 
 1. 保持 crate 边界清晰：
-   - `web-llm-cli` 负责参数解析和输出
-   - `web-llm-core` 负责共享类型和 trait
-   - `web-llm-agent` 负责 provider-agnostic 协调逻辑
-   - `web-llm-browser` 负责浏览器抽象与后端
-   - `web-llm-state` 负责本地状态
-   - `web-llm-provider` 负责厂商实现与注册
-2. 不要把 DeepSeek 站点细节泄漏到 `web-llm-agent` 或 `web-llm-core`。
+   - `imperial-desk-cli` 负责参数解析和输出
+   - `imperial-desk-core` 负责共享类型和 trait
+   - `imperial-desk-agent` 负责 provider-agnostic 协调逻辑
+   - `imperial-desk-browser` 负责浏览器抽象与后端
+   - `imperial-desk-state` 负责本地状态
+   - `imperial-desk-provider` 负责厂商实现与注册
+2. 不要把 DeepSeek 站点细节泄漏到 `imperial-desk-agent` 或 `imperial-desk-core`。
 3. 架构或流程变更时，同时更新相关文档。
+4. 子代理负责具体实现时，主 agent 负责：
+   - 跟踪是否偏离 issue 范围
+   - 处理跨模块协调
+   - 统一本次提交内容
+5. 子代理完成后，主 agent 必须复核其结果再进入验证或提交流程。
 
 ### Step 3: 验证
 
@@ -179,6 +221,7 @@ Rust 变更的默认验证顺序：
 2. 若已有远端和分支，优先在与当前 issue 对应的分支上工作。
 3. 每个 issue 至少对应一组清晰提交。
 4. 不要把多个无关能力挤进同一次提交。
+5. 即使子代理完成了代码，最终提交仍由主 agent 统一整理和执行。
 
 ## 当前阶段提醒
 
@@ -192,6 +235,17 @@ Rust 变更的默认验证顺序：
 尤其要注意：
 
 - `deepseek-web` 已有较多实现
-- `web-llm-agent` 仍是极简版本，不等于完整工具协调器
+- `imperial-desk-agent` 仍是极简版本，不等于完整工具协调器
 - `deepseek-api` 目前仍是占位
 - 测试覆盖几乎为空
+
+## 后续开发默认模式
+
+除纯文档调整、状态整理、轻量排查外，后续真实开发默认采用：
+
+1. Plane issue 进入 `In Progress`
+2. 主 agent 创建执行负责人子代理
+3. 子代理接管实现
+4. 主 agent 复核、验证、更新 Plane、提交 git
+
+这套流程是本仓库的默认开发模式，而不是临时约定。

@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/web-llm-cli",
-    "crates/web-llm-core",
-    "crates/web-llm-agent",
-    "crates/web-llm-browser",
-    "crates/web-llm-state",
-    "crates/web-llm-provider",
+    "crates/imperial-desk-cli",
+    "crates/imperial-desk-core",
+    "crates/imperial-desk-agent",
+    "crates/imperial-desk-browser",
+    "crates/imperial-desk-state",
+    "crates/imperial-desk-provider",
 ]
 
 [workspace.package]

@@ -808,6 +808,75 @@ dependencies = [
 ]
 
 [[package]]
+name = "imperial-desk-agent"
+version = "0.1.0"
+dependencies = [
+ "imperial-desk-core",
+ "serde",
+]
+
+[[package]]
+name = "imperial-desk-browser"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chromiumoxide",
+ "futures",
+ "imperial-desk-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "imperial-desk-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "imperial-desk-agent",
+ "imperial-desk-core",
+ "imperial-desk-provider",
+ "imperial-desk-state",
+ "ratatui",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "imperial-desk-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "imperial-desk-provider"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "imperial-desk-browser",
+ "imperial-desk-core",
+ "imperial-desk-state",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "imperial-desk-state"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "imperial-desk-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "indoc"
 version = "2.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1725,75 +1794,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75a326b8c223ee17883a4251907455a2431acc2791c98c26279376490c378c16"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "web-llm-agent"
-version = "0.1.0"
-dependencies = [
- "serde",
- "web-llm-core",
-]
-
-[[package]]
-name = "web-llm-browser"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chromiumoxide",
- "futures",
- "serde",
- "serde_json",
- "tokio",
- "web-llm-core",
-]
-
-[[package]]
-name = "web-llm-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "ratatui",
- "serde_json",
- "tokio",
- "web-llm-agent",
- "web-llm-core",
- "web-llm-provider",
- "web-llm-state",
-]
-
-[[package]]
-name = "web-llm-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "web-llm-provider"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "tokio",
- "web-llm-browser",
- "web-llm-core",
- "web-llm-state",
-]
-
-[[package]]
-name = "web-llm-state"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "serde",
- "serde_json",
- "web-llm-core",
 ]
 
 [[package]]

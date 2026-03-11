@@ -1,16 +1,16 @@
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use serde_json::json;
-use tokio::time::sleep;
-use web_llm_browser::{create_default_browser_backend, BrowserBackend, BrowserLaunchOptions};
-use web_llm_core::{
+use imperial_desk_browser::{create_default_browser_backend, BrowserBackend, BrowserLaunchOptions};
+use imperial_desk_core::{
     AskRequest, AskResponse, DeleteAllResult, DeleteCapable, DeleteSessionResult, InspectCapable,
     InspectRequest, InspectResult, LoginCapable, LoginRequest, LoginResult, LoginState,
     ProviderCapabilities, ProviderDefinition, ProviderHandle, ProviderMetadata, ProviderOptions,
     Result, SessionMode, WebLlmError, WebLlmProvider,
 };
-use web_llm_state::{clear_recent_session, StatePaths};
+use imperial_desk_state::{clear_recent_session, StatePaths};
+use serde_json::json;
+use tokio::time::sleep;
 
 use crate::providers::deepseek::{
     common::{
@@ -146,7 +146,7 @@ impl DeepseekWebProvider {
         }
 
         Err(WebLlmError::browser(format!(
-            "unable to find the chat input box. run `cargo run -p web-llm-cli -- login --provider {PROVIDER_ID} --headed` and log in manually first"
+            "unable to find the chat input box. run `cargo run -p imperial-desk-cli -- login --provider {PROVIDER_ID} --headed` and log in manually first"
         )))
     }
 

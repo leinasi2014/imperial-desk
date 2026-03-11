@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use web_llm_core::{
+use imperial_desk_core::{
     AskRequest, AskResponse, DeleteAllResult, DeleteCapable, DeleteSessionResult, InspectCapable,
     InspectRequest, InspectResult, LoginCapable, LoginRequest, LoginResult, ProviderCapabilities,
     ProviderDefinition, ProviderHandle, ProviderMetadata, ProviderOptions, Result, WebLlmError,

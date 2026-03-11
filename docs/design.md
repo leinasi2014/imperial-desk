@@ -1,169 +1,164 @@
-# Web LLM Adapter Rust Design
+# Imperial Desk Design
 
-## Goal
+## Purpose
 
-Build a Rust implementation of the existing web-LLM adapter with the same core product shape:
+This document no longer describes a purely pre-implementation design.
+It records:
 
-- provider-agnostic CLI entry
-- web-session based LLM access
+- the intended product shape
+- the architecture already implemented in the repository
+- the known gaps between the current code and the target design
+
+The source of truth for current status is the code in this repository.
+This document should stay aligned with that code.
+
+## Naming Status
+
+The repository and product name are now `Imperial Desk`.
+
+That rename is already reflected at the repository level:
+
+- repository directory: `imperial-desk`
+- Plane project: `Imperial Desk`
+- documentation and workflow identity: `Imperial Desk`
+
+The current codebase now uses Imperial Desk-prefixed implementation names such as:
+
+- crate names prefixed with `imperial-desk-`
+- the CLI binary name `imperial-desk`
+- the local state root directory `imperial-desk`
+
+In this document:
+
+- `Imperial Desk` is the project and product name
+- `imperial-desk-*` names refer to current implementation identifiers in code
+
+## Product Goal
+
+Imperial Desk is a Rust workspace for a provider-agnostic LLM command system with:
+
+- a shared CLI entrypoint
+- web-session based access to LLM providers
 - explicit session continuation via session id
-- local tool coordinator for agent mode
-- profile-backed login reuse
-- room to add more web-model providers later
+- reusable browser automation and local state
+- room for a generic agent coordinator and additional providers later
 
-This document defines the initial architecture for the Rust version before implementation starts.
+Conceptually, Imperial Desk is the command center for a single operator.
+The current code realization of that concept is still a web-provider adapter focused on `deepseek-web`.
 
-## Scope
+The current implementation focus is `deepseek-web`.
 
-Phase 1 target:
+## Current Status Summary
 
-- implement one provider: `deepseek-web`
-- support `login`, `ask`, `agent`, `inspect`
-- persist browser profile and last-session metadata
-- preserve the current JS behavior where plain `ask` starts a fresh session by default
-- keep agent mode provider-agnostic
+Implemented today in the current codebase:
 
-Phase 1 non-goals:
+- Rust workspace with six crates under `crates/`
+- the current CLI crate `imperial-desk-cli` with command surface for:
+  - `providers`
+  - `login`
+  - `config`
+  - `ask`
+  - `agent`
+  - `inspect`
+  - `delete`
+  - `delete-current`
+  - `delete-all`
+- shared core request/response types and provider capability contracts
+- Chromium/CDP-backed browser abstraction
+- local state persistence for profile paths, provider config, and recent session metadata
+- `deepseek-web` provider with:
+  - `ask`
+  - phone SMS login
+  - `inspect`
+  - session deletion endpoints
+- SMS verification TUI for the login second step
 
-- full parity for every delete/history endpoint on day one
-- WSL forwarding bridge
-- plugin loading from dynamic libraries
-- distributed multi-process coordinator
+Implemented only as placeholders or partials:
+
+- `imperial-desk-agent` is currently a thin single-ask wrapper, not a real tool-loop coordinator
+- `deepseek-api` code exists as a placeholder but is not registered in the provider registry
+- login wizard and WeChat QR login are not implemented
+- structured logging is not integrated yet
+- automated tests are effectively absent even though `cargo test` passes
 
 ## Product Constraints
 
-The Rust version should preserve these user-facing rules:
+The project should preserve these user-facing rules:
 
-- `ask` without `--session-id` creates a new web chat
-- `ask --session-id <id>` continues that exact conversation
-- reasoning/thinking defaults on
-- smart search defaults off
-- the agent loop is generic and should not know DeepSeek-specific DOM details
-- adding a second provider should not require changing the coordinator core
+- `ask` without `--session-id` starts a new web chat
+- `ask --session-id <id>` continues that conversation
+- thinking defaults on
+- search defaults off
+- provider-specific DOM logic stays out of the generic coordinator
+- adding a second provider should not require rewriting the coordinator core
 
-## Architecture Summary
+These constraints are already partially enforced in the current codebase.
 
-The system is split into five layers:
+## Repository Layout
 
-1. CLI layer
-2. Provider registry
-3. Provider adapters
-4. Agent coordinator
-5. Browser backend
-
-Provider adapters own site-specific behavior.
-The coordinator owns tool-loop behavior.
-The browser backend owns page automation, persistent profile launch, DOM interaction, and network/event capture.
-
-## Workspace Layout
-
-This project should follow a Rust workspace layout similar to `D:\workspaces\openfang\crates`:
-
-- top-level workspace manifest
-- implementation crates grouped under `crates/`
-- one responsibility per crate
-- the CLI crate remains thin and depends on lower-level crates
-
-### Proposed Workspace Layout
+Actual repository layout:
 
 ```text
-web-llm-adapter-rust/
+imperial-desk/
   Cargo.toml
   Cargo.lock
   crates/
-    web-llm-cli/
-      Cargo.toml
-      src/
-    web-llm-core/
-      Cargo.toml
-      src/
-    web-llm-agent/
-      Cargo.toml
-      src/
-    web-llm-browser/
-      Cargo.toml
-      src/
-    web-llm-state/
-      Cargo.toml
-      src/
-    web-llm-provider/
-      Cargo.toml
-      src/
-        lib.rs
-        registry.rs
-        providers/
-          mod.rs
-          deepseek/
-            mod.rs
-            common/
-              mod.rs
-              models.rs
-              session.rs
-            web/
-              mod.rs
-              provider.rs
-              selectors.rs
-              parser.rs
-              mutations.rs
-            api/
-              mod.rs
-              provider.rs
-              client.rs
+    imperial-desk-cli/
+    imperial-desk-core/
+    imperial-desk-agent/
+    imperial-desk-browser/
+    imperial-desk-state/
+    imperial-desk-provider/
   docs/
     design.md
 ```
 
-### Crate Responsibilities
+## Crate Responsibilities
 
-`web-llm-cli`
+The crate names below are the current code identifiers.
+
+`imperial-desk-cli`
 
 - command parsing
-- output formatting
-- provider selection
-- wiring dependencies together
+- provider option wiring
+- terminal output
+- SMS verification TUI
 
-`web-llm-core`
+`imperial-desk-core`
 
-- shared request/response types
-- provider traits
+- shared request and response types
+- provider contracts
 - capability metadata
 - common errors
-- configuration models
 
-`web-llm-agent`
+`imperial-desk-agent`
 
-- provider-agnostic coordinator
-- protocol parser and validator
-- local tool registry
-- step trace model
+- future home of the provider-agnostic multi-step tool coordinator
+- currently only wraps one `ask` call
 
-`web-llm-browser`
+`imperial-desk-browser`
 
-- browser backend traits
-- Chromium/CDP implementation
-- DOM helpers
-- network capture helpers
+- browser backend abstraction
+- Chromium/CDP implementation using `chromiumoxide`
 
-`web-llm-state`
+`imperial-desk-state`
 
-- local session state persistence
-- profile/state path resolution
-- JSON state schema and migrations
+- local state path resolution
+- provider config persistence
+- recent session persistence
 
-`web-llm-provider`
+`imperial-desk-provider`
 
 - provider registry
-- provider id to implementation mapping
-- vendor-specific implementations grouped by provider
-- split per access mode such as `web` and `api`
-- shared provider-local code such as auth/session helpers
+- vendor implementations
+- DeepSeek-specific shared and transport-specific logic
 
-### Provider Internal Layout
+## Provider Layout
 
-Use one provider crate and keep vendor code inside it:
+The provider crate is already structured for vendor-plus-transport separation:
 
 ```text
-crates/web-llm-provider/src/
+crates/imperial-desk-provider/src/
   lib.rs
   registry.rs
   providers/
@@ -186,443 +181,32 @@ crates/web-llm-provider/src/
         client.rs
 ```
 
-Design rules for this crate:
+Current reality:
 
-- one vendor gets one top-level module under `providers/`
-- one transport gets one submodule under the vendor, such as `web` or `api`
-- `common/` holds vendor-specific logic shared by multiple transports
-- the registry exports multiple provider ids from one vendor, for example `deepseek-web` and `deepseek-api`
-- adding `deepseek-api` should not require moving DeepSeek code across crates again
+- `deepseek-web` is implemented and registered
+- `deepseek-api` has placeholder code but is not exported by the registry yet
 
-### Why This Layout
+## Architecture Summary
 
-This layout is preferred because:
+The implementation still follows five layers:
 
-- it matches the `openfang/crates` style you referenced
-- it keeps the workspace small while still leaving room for many providers
-- it lets one vendor expose multiple provider ids such as `deepseek-web` and `deepseek-api`
-- browser automation can evolve independently from provider logic
-- coordinator logic stays reusable for non-DeepSeek providers
-- the CLI binary remains thin and easy to replace later
+1. CLI layer
+2. Provider registry
+3. Provider adapters
+4. Agent coordinator
+5. Browser backend
 
-Rust structure rules:
+Current status by layer:
 
-- keep binary crates thin
-- keep cross-crate contracts in `web-llm-core`
-- keep provider-specific code out of the coordinator crate
-- keep browser backend code out of provider registry code
-- prefer adding a new vendor module before adding a new crate
-- only split a vendor back out into its own crate if compile times or ownership boundaries become painful
+- CLI layer: implemented
+- Provider registry: implemented for `deepseek-web` only
+- Provider adapters: `deepseek-web` implemented, `deepseek-api` placeholder
+- Agent coordinator: scaffold only
+- Browser backend: implemented with Chromium/CDP
 
-## Core Traits
+## Current Core Contracts
 
-### Provider Trait
-
-The coordinator only needs a minimal provider contract:
-
-```rust
-#[async_trait::async_trait]
-pub trait WebLlmProvider: Send {
-    async fn ask(&mut self, prompt: &str, request: AskRequest) -> Result<AskResponse>;
-}
-```
-
-Command-specific capabilities should be modeled explicitly:
-
-```rust
-#[async_trait::async_trait]
-pub trait LoginCapable {
-    async fn login(&mut self, request: LoginRequest) -> Result<LoginResult>;
-}
-
-#[async_trait::async_trait]
-pub trait InspectCapable {
-    async fn inspect(&mut self, request: InspectRequest) -> Result<InspectResult>;
-}
-
-#[async_trait::async_trait]
-pub trait DeleteCapable {
-    async fn delete_session(&mut self, session_id: &str) -> Result<DeleteSessionResult>;
-    async fn delete_current_session(&mut self) -> Result<DeleteSessionResult>;
-    async fn delete_all_history(&mut self) -> Result<DeleteAllResult>;
-}
-```
-
-Registry metadata should be static:
-
-```rust
-pub struct ProviderDefinition {
-    pub id: &'static str,
-    pub display_name: &'static str,
-    pub description: &'static str,
-    pub capabilities: ProviderCapabilities,
-    pub factory: fn(&ProviderOptions) -> Result<Box<dyn ProviderHandle>>,
-}
-```
-
-The CLI should query capabilities before invoking a command.
-
-### Agent Coordinator
-
-The coordinator remains provider-agnostic.
-
-Responsibilities:
-
-- build the initial JSON-only protocol prompt
-- parse model responses
-- execute one local tool at a time
-- feed tool results back into the same provider session
-- stop on `final`
-- stop on `max_steps`
-
-### Browser Backend Trait
-
-Provider adapters should not depend directly on a concrete browser engine.
-
-```rust
-#[async_trait::async_trait]
-pub trait BrowserBackend: Send {
-    async fn goto(&mut self, url: &str) -> Result<()>;
-    async fn click_first_visible(&mut self, selectors: &[&str]) -> Result<bool>;
-    async fn fill_first_visible(&mut self, selectors: &[&str], text: &str) -> Result<()>;
-    async fn body_text(&mut self) -> Result<String>;
-    async fn evaluate_json<T: serde::de::DeserializeOwned>(
-        &mut self,
-        script: &str,
-    ) -> Result<T>;
-    async fn current_url(&mut self) -> Result<String>;
-}
-```
-
-This keeps provider code testable and makes browser backend replacement possible.
-
-## Interactive Login Design
-
-The CLI should support both scripted login and a guided interactive login flow.
-
-Primary goal:
-
-- make `web` providers usable without requiring users to manually operate the browser unless the site forces a challenge step
-
-Secondary goals:
-
-- keep provider ids stable for automation
-- keep the interactive UX grouped by vendor and transport
-- support multiple login methods per web provider
-- preserve room for future vendors beyond DeepSeek
-
-### Login Entry Modes
-
-The system should support two entry modes:
-
-1. interactive login wizard
-2. direct non-interactive login flags
-
-Interactive mode is the default for humans:
-
-```text
-web-llm login
-```
-
-Direct mode is for scripts and agents:
-
-```text
-web-llm login --provider deepseek-web --method wechat
-web-llm login --provider deepseek-web --method phone-sms
-```
-
-The underlying provider id remains transport-specific, such as `deepseek-web`.
-The interactive wizard only changes how the CLI presents choices.
-
-### Interactive Login Wizard Flow
-
-The TUI should guide the user through a small focused flow:
-
-1. select vendor
-2. select transport
-3. select login method
-4. enter the provider-specific login screen
-
-For DeepSeek the flow should look like:
-
-1. `DeepSeek`
-2. `Web` or `API`
-3. if `Web`, choose:
-   - `WeChat QR`
-   - `Phone SMS`
-
-If `API` is chosen before it exists, the UI should show that the route is reserved but not implemented.
-
-The wizard is a presentation layer only.
-Internally the resolved target should still become a concrete provider id plus login method:
-
-- provider id: `deepseek-web`
-- login method: `wechat`
-
-### Login State Model
-
-The current login state is too small for multi-step and multi-method flows.
-The design should evolve `LoginRequest` and `LoginResult` so the provider can explicitly tell the CLI what the next screen should be.
-
-Target shape:
-
-```rust
-pub enum LoginMethod {
-    Wechat,
-    PhoneSms,
-}
-
-pub enum LoginState {
-    LoggedIn,
-    QrCodeReady,
-    VerificationCodeRequired,
-    ExternalActionRequired,
-}
-```
-
-Intent of these states:
-
-- `LoggedIn`: browser session is authenticated and chat input is available
-- `QrCodeReady`: provider has prepared a QR code image or renderable payload
-- `VerificationCodeRequired`: provider has already submitted the phone number and is waiting for the SMS code
-- `ExternalActionRequired`: the provider hit a blocking site challenge such as a slider or image captcha and needs the user to act in the browser
-
-The CLI should react to state transitions instead of hard-coding DeepSeek-specific assumptions.
-
-### WeChat QR Login Design
-
-This should become the preferred DeepSeek web login path.
-
-Reasoning:
-
-- the login page exposes a stable WeChat QR `iframe`
-- the QR area can be captured as an element screenshot
-- QR scanning avoids entering phone numbers and SMS verification codes
-- it also avoids part of the image-captcha friction seen in the phone flow
-
-Observed DeepSeek page facts:
-
-- the WeChat login area is rendered as an `iframe`
-- the `iframe` source is under `https://open.weixin.qq.com/connect/qrconnect`
-- the QR area can be screenshot directly from the browser automation layer
-
-Provider flow:
-
-1. open `https://chat.deepseek.com/sign_in`
-2. detect the WeChat QR `iframe`
-3. capture the QR area as an image
-4. return `LoginState::QrCodeReady`
-5. keep the browser session alive and poll for successful login
-6. once the chat prompt appears, return `LoginState::LoggedIn`
-
-CLI flow:
-
-1. user chooses `DeepSeek -> Web -> WeChat QR`
-2. CLI asks provider to prepare WeChat login
-3. provider returns QR image data
-4. TUI renders the QR code centered in an OpenFang-style panel
-5. footer shows status such as:
-   - `waiting for scan`
-   - `scan detected, confirm in WeChat`
-   - `login completed`
-6. if login succeeds, the TUI exits cleanly
-
-### QR Rendering Strategy
-
-The QR image should be rendered inside the terminal UI without requiring the user to inspect the browser window.
-
-Preferred rendering pipeline:
-
-1. provider captures the QR area as PNG bytes
-2. CLI converts the PNG to a terminal-friendly representation
-3. TUI draws the representation in a centered panel
-
-Rendering fallback order:
-
-1. block-rendered QR using black and white cell blocks
-2. if image decode or render fails, print a clear message and keep the browser window open as fallback
-
-The design should not depend on cross-origin DOM access inside the WeChat `iframe`.
-Element screenshot is preferred because it works even when inner-frame DOM is restricted.
-
-### Phone SMS Login Design
-
-Phone SMS remains a secondary login method.
-
-Flow:
-
-1. CLI resolves the phone number from:
-   - `login --phone`
-   - provider-derived env var such as `WEB_LLM_DEEPSEEK_WEB_PHONE`
-   - optional compatibility alias such as `WEB_LLM_DEEPSEEK_PHONE`
-   - provider config file on disk
-2. provider opens the DeepSeek sign-in page
-3. provider fills the phone number in the background
-4. provider clicks `发送验证码`
-5. if the site immediately asks for a human challenge, return `ExternalActionRequired`
-6. after the challenge is cleared and the page is ready, return `VerificationCodeRequired`
-7. CLI opens a TUI input screen for the SMS code
-8. user types the code in the terminal
-9. provider submits `登录` and waits for the normal chat input to appear
-
-Observed risk:
-
-- the phone route may trigger an image challenge after clicking `发送验证码`
-
-Because of that risk, phone login should be documented as a fallback path, not the preferred first path.
-
-Rules:
-
-- the phone number may be stored locally for convenience
-- the verification code must never be stored on disk
-- the second login step should reuse the existing browser session when possible
-- if the browser is already logged in, `login` should return `LoggedIn` immediately
-- if a challenge interrupts the flow, the browser should remain open and the TUI should tell the user exactly what to do
-
-### Local Phone Number Storage
-
-Provider-specific config should live next to other local state:
-
-```text
-%LOCALAPPDATA%/web-llm-adapter-rust/deepseek-web/provider-config.json
-```
-
-Example:
-
-```json
-{
-  "phone_number": "13800138000"
-}
-```
-
-The CLI should expose:
-
-- `config show`
-- `config set-phone --phone <number>`
-- `config clear-phone`
-
-### TUI Screen Design
-
-The login TUI should borrow the visual direction from `openfang-cli`:
-
-- orange accent
-- charcoal background
-- muted stone body text
-- rounded bordered panels
-- clear footer key hints
-
-Initial screens:
-
-1. vendor selection
-2. transport selection
-3. login method selection
-4. WeChat QR display
-5. SMS verification input
-6. external action required
-
-The UI should stay small and single-purpose.
-This is not a dashboard.
-
-### Browser Ownership During Login
-
-The browser should remain under provider control for the full login session.
-
-Why:
-
-- WeChat scan success must be detected by the provider polling the page
-- SMS login second step must reuse the same cookies and page state
-- site challenges may need the user to complete a step in the already-open browser
-
-The CLI owns the terminal experience.
-The provider owns the browser.
-
-### Future Provider Reuse
-
-This login architecture should be generic enough for other web LLM vendors.
-
-Reusable parts:
-
-- wizard structure
-- login method enum
-- QR display screen
-- external action required screen
-- provider-driven login state transitions
-
-Provider-specific parts:
-
-- login selectors
-- QR location logic
-- success detection
-- challenge detection
-
-## Browser Backend Decision
-
-Rust does not have a Playwright-equivalent with the same maturity and ergonomics.
-The design should keep the browser layer swappable.
-
-Preferred direction:
-
-- phase 1 backend: Chromium CDP-based backend
-- avoid coupling provider logic to one crate's page API
-- keep browser launch, selectors, JS evaluation, and network observation behind `BrowserBackend`
-
-Backend candidates:
-
-1. `chromiumoxide`
-   - strongest fit for direct Chrome DevTools access
-   - useful for response/network event capture
-   - best fit for persistent profile launching
-
-2. WebDriver-based backend such as `fantoccini` or `thirtyfour`
-   - weaker fit for network event capture
-   - easier portability if a remote driver is desired later
-
-Decision:
-
-- design for CDP first
-- keep a backend trait so this choice is reversible
-
-## Session And State Model
-
-Two state concepts should remain separate:
-
-1. browser profile state
-2. local convenience state
-
-### Browser Profile State
-
-Persistent profile directory stores:
-
-- login cookies
-- local storage
-- site session artifacts
-
-This should be provider-specific by default:
-
-```text
-.web-llm-adapter/
-  profiles/
-    deepseek-web/
-```
-
-### Local Convenience State
-
-A small JSON file stores only the last known chat session for convenience commands:
-
-```json
-{
-  "version": 1,
-  "lastSession": {
-    "id": "uuid",
-    "url": "https://...",
-    "updatedAt": "2026-03-11T12:00:00Z"
-  }
-}
-```
-
-This file must not become implicit persistence for normal `ask`.
-
-## Data Types
+The code currently uses these shapes, or close equivalents.
 
 ### AskRequest
 
@@ -631,7 +215,7 @@ pub struct AskRequest {
     pub session_id: Option<String>,
     pub thinking_enabled: bool,
     pub search_enabled: bool,
-    pub timeout: std::time::Duration,
+    pub timeout_ms: Option<u64>,
 }
 ```
 
@@ -639,10 +223,10 @@ pub struct AskRequest {
 
 ```rust
 pub struct AskResponse {
-    pub url: String,
+    pub url: Option<String>,
     pub chat_session_id: Option<String>,
     pub model: Option<String>,
-    pub prompt: String,
+    pub prompt: Option<String>,
     pub requested_session_id: Option<String>,
     pub response: Option<String>,
     pub reasoning: Option<String>,
@@ -652,300 +236,290 @@ pub struct AskResponse {
 }
 ```
 
-### Agent Protocol
+### LoginState
 
-The same protocol shape should be preserved:
+Current code:
 
-- `tool_call`
-- `final`
-
-```json
-{"type":"tool_call","tool":"shell","arguments":{"command":"pwd"},"reason":"inspect cwd"}
+```rust
+pub enum LoginState {
+    LoggedIn,
+    VerificationCodeRequired,
+}
 ```
 
-```json
-{"type":"final","answer":"done"}
+Still planned but not implemented:
+
+- `QrCodeReady`
+- `ExternalActionRequired`
+
+### Provider Registry
+
+Current registry behavior:
+
+- default provider id is `deepseek-web`
+- `provider_definitions()` returns only one provider today
+
+Future target:
+
+- register both `deepseek-web` and `deepseek-api`
+- eventually support more vendors
+
+## Browser Backend
+
+The browser layer is already abstracted behind `BrowserBackend`.
+
+Current interface includes:
+
+- `goto`
+- `has_first_visible`
+- `click_first_visible`
+- `fill_first_visible`
+- `press_key_on_first_visible`
+- `body_text`
+- `evaluate_json`
+- `current_url`
+
+Current implementation:
+
+- `ChromiumBrowserBackend` using `chromiumoxide`
+- persistent user data dir support
+- headed or headless launch
+- Linux/WSL sandbox disabling when needed
+
+Not implemented yet:
+
+- network event capture
+- alternative backends such as WebDriver
+- screenshot-based QR extraction
+
+## Local State Model
+
+State is already split into two concepts:
+
+1. browser profile state
+2. local convenience state
+
+Current files managed by `imperial-desk-state`:
+
+- provider profile directory
+- `provider-config.json`
+- `recent-session.json`
+
+Current local state root directory in code:
+
+```text
+%LOCALAPPDATA%/imperial-desk/
 ```
 
-## CLI Surface
+## Current CLI Surface
 
-Phase 1 CLI should expose:
+The current binary and command examples in code use the `imperial-desk` executable name.
+
+Implemented commands:
 
 - `providers`
 - `login`
+- `config show`
+- `config set-phone --phone <number>`
+- `config clear-phone`
 - `ask`
 - `agent`
 - `inspect`
-
-Phase 2:
-
-- `delete`
+- `delete <chat_session_id>`
 - `delete-current`
-- `delete-all`
+- `delete-all --force`
 
-Global options:
+Implemented global options:
 
 - `--provider`
 - `--profile-dir`
 - `--base-url`
 - `--headed`
 
-`login` behavior:
+Current differences from the earlier design draft:
 
-- `login` without flags should launch the interactive wizard
-- `login --provider <id> --method <method>` should bypass the wizard
-- `login --provider deepseek-web --method wechat` should open the WeChat QR flow
-- `login --provider deepseek-web --method phone-sms` should open the SMS flow
-- `login --phone <number>` remains valid only for the SMS path
-- `login --headed` should keep the browser visible for challenge handling and debugging
+- `config` commands already exist
+- delete commands already exist
+- `login --method ...` is not implemented
+- `ask --json` and `agent --json` are not implemented
+- `agent --max-protocol-retries`, `--tools`, and `--workdir` are not implemented
 
-`ask` options:
+## Current Login Design
 
-- `--json`
-- `--thinking`
-- `--search`
-- `--session-id`
-- `--timeout-ms`
+### Implemented Today
 
-`agent` options:
+The current login flow supports only the phone SMS path:
 
-- `--json`
-- `--thinking`
-- `--search`
-- `--session-id`
-- `--timeout-ms`
-- `--max-steps`
-- `--max-protocol-retries`
-- `--tools`
-- `--workdir`
+1. resolve phone number from CLI, env, or provider config
+2. open the DeepSeek sign-in surface
+3. fill the phone number
+4. click `发送验证码`
+5. return `VerificationCodeRequired`
+6. prompt for the SMS code in a terminal UI
+7. submit the code and wait for chat readiness
+
+The current CLI forces a headed browser for `login`.
+
+### Not Implemented Yet
+
+- interactive vendor or transport wizard
+- WeChat QR login
+- challenge detection and explicit `ExternalActionRequired`
+- QR rendering inside the terminal
+- provider-driven multi-method login routing
+
+## Agent Coordinator
+
+This is the largest remaining architecture gap.
+
+Target behavior:
+
+- build a JSON-only protocol prompt
+- parse `tool_call` and `final`
+- execute local tools one at a time
+- feed tool results back into the same provider session
+- stop on `final` or `max_steps`
+
+Current behavior:
+
+- `imperial-desk-agent` validates the task
+- it forwards a single `ask` call to the provider
+- it returns that response as the final answer
+- there is no protocol parsing, no tool execution, and no repair loop
 
 ## Tool Execution Layer
 
-Initial built-in tools:
+Target built-in tools remain:
 
 - `shell`
 - `read_file`
 - `write_file`
 - `list_files`
 
-Rules:
+Current status:
 
-- tools execute locally, not inside the provider adapter
-- shell must be non-interactive
-- output should be truncated to a configured cap
-- file tools must resolve paths relative to a supplied workdir
+- not implemented
+- no `ToolRegistry`
+- no workdir sandboxing in the agent layer
+- no tool serialization boundary yet
 
-Later extension path:
+## DeepSeek Web Provider
 
-- register tools by name in a `ToolRegistry`
-- support `Fn`-based or trait-object tool implementations
-- keep serialization boundary stable so external tools can be added later
+### Implemented Today
 
-## DeepSeek Provider Design
+The current `deepseek-web` provider already handles:
 
-DeepSeek should live inside `web-llm-provider::providers::deepseek`.
+- browser launch with persistent profile
+- opening the base URL or a requested session URL
+- optionally starting a new chat when no session id is supplied
+- toggling thinking and search controls in the UI
+- filling and submitting prompts
+- waiting for reply stabilization from DOM text
+- parsing the final assistant message from rendered DOM
+- extracting the current session id from the URL
+- storing recent session metadata
+- `inspect`
+- `delete_session`
+- `delete_current_session`
+- `delete_all_history`
 
-It should expose at least two provider ids over time:
+### Not Implemented Yet
 
-- `deepseek-web`
-- `deepseek-api`
+- WeChat QR login
+- login challenge detection
+- network-stream parsing of replies
+- richer diagnostics and traces
+- API transport parity
 
-The DeepSeek web provider should map cleanly from the current JS implementation.
+## DeepSeek API Provider
 
-Responsibilities:
+Current state:
 
-- launch browser with persistent profile
-- open the sign-in route when login is requested
-- support multiple login methods for the same web provider
-- detect and capture the WeChat QR area
-- keep the browser session alive while the CLI renders QR or SMS prompts
-- detect challenge states that require human action
-- open requested conversation URL or base URL
-- optionally click `new chat`
-- toggle thinking/search controls
-- fill prompt and submit
-- wait for response stabilization
-- parse either:
-  - network event stream from completion endpoint
-  - DOM fallback from rendered assistant message
-- extract current session id from URL
-- persist last-session convenience state
+- placeholder `DeepseekApiClient`
+- placeholder provider returning `NotImplemented`
+- not exposed by the provider registry
 
-DeepSeek-specific selectors and parsing logic should live under `providers/deepseek/web/`, not in shared coordinator code.
+Target state:
 
-DeepSeek API-specific request building, auth, and streaming logic should live under `providers/deepseek/api/`.
-
-## Error Handling
-
-Rust error policy:
-
-- application layer may use `anyhow`
-- library/provider error types should use `thiserror`
-- avoid `unwrap` and `expect` in runtime code
-- add context to all filesystem, browser, and network failures
-
-Suggested top-level error categories:
-
-- provider not found
-- provider capability unsupported
-- browser launch failure
-- login/session unavailable
-- selector not found
-- response timeout
-- protocol parse failure
-- tool execution failure
-- filesystem state corruption
-
-## Async Model
-
-Use Tokio.
-
-Reasons:
-
-- browser automation will be async
-- CLI commands can share runtime patterns
-- future provider implementations may need concurrent event handling
-
-Rules:
-
-- avoid holding locks across `.await`
-- prefer message passing over shared mutable global state
-- keep provider instances single-owner where possible
-
-## Serialization And Config
-
-Use:
-
-- `serde`
-- `serde_json`
-- `camino` or `std::path::PathBuf` for paths
-
-Configuration priority:
-
-1. CLI flags
-2. env vars
-3. provider defaults
-
-Potential env vars:
-
-- `WEB_LLM_PROVIDER`
-- `WEB_LLM_PROFILE_DIR`
-- `WEB_LLM_BASE_URL`
+- real request building and authentication
+- `ask` support
+- registry export
+- CLI selection support
 
 ## Logging And Diagnostics
 
-Use structured logging from the start.
-
-Suggested stack:
+Target stack remains:
 
 - `tracing`
 - `tracing-subscriber`
 
-Log categories:
+Current status:
 
-- provider lifecycle
-- browser lifecycle
-- session selection
-- tool execution
-- protocol repair retries
+- not integrated yet
+- diagnostics are mostly command errors and provider/browser error strings
 
-Default CLI output should remain quiet.
-Verbose logs should be behind an opt-in flag or environment variable.
+## Testing Status
 
-## Testing Strategy
+Current state:
 
-### Unit Tests
+- `cargo test` passes
+- there are effectively zero meaningful unit or integration tests
 
-Test:
+Still needed:
 
-- session state normalization
-- protocol JSON extraction
-- protocol validation
-- tool argument validation
-- path resolution
-
-### Integration Tests
-
-Test:
-
-- CLI parsing
-- provider registry
-- fake-provider agent loop
-
-### Browser Tests
-
-Use a fake provider and fake browser backend first.
-Real site integration should be gated behind explicit opt-in because the web UI is unstable and requires a real login state.
+- session normalization tests
+- parser tests
+- path resolution tests
+- CLI parsing tests
+- fake provider agent loop tests
+- tool execution tests
 
 ## Security Notes
 
-The agent loop can execute local commands.
-
-Required safeguards:
+The eventual tool loop will execute local commands, so these safeguards remain required:
 
 - explicit tool allowlist
-- explicit `workdir`
+- explicit workdir
 - bounded output capture
 - non-interactive shell execution
-- no silent privilege escalation behavior
+- no silent privilege escalation
 
-Future hardening options:
+These rules are still design requirements because the tool layer is not implemented yet.
 
-- denylist dangerous shell patterns
-- read-only mode
-- no-shell mode
-- path sandboxing
+## Implementation Status By Milestone
 
-## Implementation Plan
+### Completed Or Largely Completed
 
-### Milestone 1
+- workspace bootstrap
+- crate layout
+- core shared contracts
+- Chromium browser backend
+- local state persistence
+- `deepseek-web` base flow
+- CLI command surface for current implemented features
 
-- create workspace manifest and `crates/` layout
-- add CLI skeleton
-- add provider registry
-- add type definitions
-- add fake provider for tests
+### In Progress Or Still Missing
 
-### Milestone 2
+- real provider-agnostic agent coordinator
+- tool execution layer
+- login wizard
+- WeChat QR login
+- `deepseek-api`
+- structured logging
+- automated tests
 
-- implement generic agent coordinator
-- implement built-in tool registry
-- add protocol tests
+## Immediate Next Steps
 
-### Milestone 3
+Recommended next implementation order:
 
-- implement `deepseek-web` inside `web-llm-provider`
-- keep DeepSeek shared logic under `providers/deepseek/common`
-- implement DeepSeek web flow on top of a CDP browser backend
-- implement `login`, `ask`, `inspect`
-- persist last-session state
-
-### Milestone 4
-
-- add delete/history endpoints
-- add richer diagnostics
-- add Windows/WSL interop story if still needed
-
-### Milestone 5
-
-- add `deepseek-api` to validate the vendor-plus-transport layout
-- optionally add a second vendor after that
+1. align the agent crate with the intended protocol loop
+2. implement the tool execution layer
+3. add tests around core, state, parser, and fake-provider behavior
+4. add login wizard and WeChat QR support
+5. register and implement `deepseek-api`
 
 ## Open Questions
 
-1. Should the first Rust backend be fully native CDP, or is a temporary external browser bridge acceptable for faster parity?
-2. Should the first workspace keep only the essential crates, or create the full planned crate split immediately?
-3. Should destructive history-delete commands wait until after stable provider capability modeling lands?
-4. Should tool execution eventually be split into a separate crate so non-web providers can reuse it?
-
-## Initial Decision Summary
-
-Initial decisions for implementation:
-
-- build as a workspace with thin binary and reusable library crates
-- keep provider registry and agent coordinator generic from day one
-- implement DeepSeek first
-- design browser interaction behind a trait
-- prefer CDP-backed browser automation
-- keep default `ask` stateless/new-session
-- keep tool execution local and explicitly allowlisted
+1. Should delete and history management remain in the same provider crate, or move behind richer capability modeling later?
+2. Should network-based response capture be added before or after the generic tool loop?
+3. When `deepseek-api` lands, should it share a wider contract surface with `deepseek-web`, or stay intentionally narrow?

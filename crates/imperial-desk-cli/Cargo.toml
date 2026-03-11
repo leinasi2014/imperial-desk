@@ -1,5 +1,5 @@
 [package]
-name = "web-llm-cli"
+name = "imperial-desk-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ rust-version.workspace = true
 publish = false
 
 [[bin]]
-name = "web-llm"
+name = "imperial-desk"
 path = "src/main.rs"
 
 [dependencies]
@@ -16,7 +16,7 @@ clap.workspace = true
 ratatui.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
-web-llm-agent = { path = "../web-llm-agent" }
-web-llm-core = { path = "../web-llm-core" }
-web-llm-provider = { path = "../web-llm-provider" }
-web-llm-state = { path = "../web-llm-state" }
+imperial-desk-agent = { path = "../imperial-desk-agent" }
+imperial-desk-core = { path = "../imperial-desk-core" }
+imperial-desk-provider = { path = "../imperial-desk-provider" }
+imperial-desk-state = { path = "../imperial-desk-state" }

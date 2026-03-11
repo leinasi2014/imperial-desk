@@ -1,5 +1,5 @@
 [package]
-name = "web-llm-agent"
+name = "imperial-desk-state"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,5 +7,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+dirs.workspace = true
 serde.workspace = true
-web-llm-core = { path = "../web-llm-core" }
+serde_json.workspace = true
+imperial-desk-core = { path = "../imperial-desk-core" }

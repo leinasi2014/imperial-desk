@@ -1,5 +1,5 @@
 [package]
-name = "web-llm-provider"
+name = "imperial-desk-provider"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,6 +11,6 @@ async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
-web-llm-browser = { path = "../web-llm-browser" }
-web-llm-core = { path = "../web-llm-core" }
-web-llm-state = { path = "../web-llm-state" }
+imperial-desk-browser = { path = "../imperial-desk-browser" }
+imperial-desk-core = { path = "../imperial-desk-core" }
+imperial-desk-state = { path = "../imperial-desk-state" }

@@ -8,22 +8,22 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use clap::{ArgAction, Parser, Subcommand};
-use login_tui::prompt_verification_code;
-use web_llm_agent::{AgentOptions, WebLlmAgent};
-use web_llm_core::{
+use imperial_desk_agent::{AgentOptions, WebLlmAgent};
+use imperial_desk_core::{
     AskRequest, InspectRequest, LoginRequest, LoginState, ProviderCapabilities, ProviderDefinition,
     ProviderOptions,
 };
-use web_llm_provider::{provider_definition, provider_definitions, DEFAULT_PROVIDER_ID};
-use web_llm_state::{
+use imperial_desk_provider::{provider_definition, provider_definitions, DEFAULT_PROVIDER_ID};
+use imperial_desk_state::{
     clear_provider_config, load_provider_config, save_provider_config, ProviderConfig, StatePaths,
 };
+use login_tui::prompt_verification_code;
 
 #[derive(Parser)]
 #[command(
-    name = "web-llm",
+    name = "imperial-desk",
     version,
-    about = "Workspace CLI for web-based LLM providers"
+    about = "Imperial Desk CLI for provider-agnostic LLM access"
 )]
 struct Cli {
     #[arg(global = true, long, default_value = DEFAULT_PROVIDER_ID)]
@@ -141,7 +141,7 @@ async fn main() -> Result<()> {
                 LoginState::VerificationCodeRequired => {
                     let phone = resolved_phone.ok_or_else(|| {
                         anyhow!(
-                            "login requires a phone number. set it with `web-llm config set-phone --provider {provider_id} --phone <number>` or pass `--phone`"
+                            "login requires a phone number. set it with `imperial-desk config set-phone --provider {provider_id} --phone <number>` or pass `--phone`"
                         )
                     })?;
                     let code = prompt_verification_code(&phone)?;
@@ -367,9 +367,9 @@ fn phone_env_var_candidates(provider_id: &str) -> Vec<String> {
             }
         })
         .collect::<String>();
-    let mut candidates = vec![format!("WEB_LLM_{normalized_provider_id}_PHONE")];
+    let mut candidates = vec![format!("IMPERIAL_DESK_{normalized_provider_id}_PHONE")];
     if provider_id == "deepseek-web" {
-        candidates.push("WEB_LLM_DEEPSEEK_PHONE".to_owned());
+        candidates.push("IMPERIAL_DESK_DEEPSEEK_PHONE".to_owned());
     }
     candidates
 }

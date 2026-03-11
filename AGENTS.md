@@ -19,10 +19,10 @@
 
 - 已有 Rust workspace 和六个核心 crate
 - CLI 已实现 `providers`、`login`、`config`、`ask`、`agent`、`inspect`、`delete*`
-- `web-llm-browser` 已有 Chromium/CDP backend
-- `web-llm-state` 已有 profile、recent session、provider config 持久化
+- `imperial-desk-browser` 已有 Chromium/CDP backend
+- `imperial-desk-state` 已有 profile、recent session、provider config 持久化
 - `deepseek-web` 已有 `ask`、短信登录、`inspect` 和删除接口实现
-- `web-llm-agent` 目前仍是最小骨架，尚未实现完整 tool loop
+- `imperial-desk-agent` 目前仍是最小骨架，尚未实现完整 tool loop
 - `deepseek-api` 仍是占位实现
 - 测试已能跑通，但当前几乎没有测试用例
 
@@ -41,25 +41,43 @@
 - 每个活跃 issue 保持一个持续更新的 `## Codex Workpad` 评论。
 - 新发现的超范围内容要新建 follow-up issue，不要悄悄并入当前 issue。
 
+## 负责人模型
+
+本项目把“负责人”拆成两个角色：
+
+- Plane 负责人
+  - 挂在 Plane 项目或 issue 上的人类账号
+  - 负责项目所有权、排期、状态和验收记录
+- 执行负责人
+  - 由主 agent 创建的子代理
+  - 负责接管某个开发 issue 的具体实现
+
+约束：
+
+- 不把虚拟成员直接写成 Plane 用户
+- 不让子代理直接替代 Plane 的项目所有权
+- 每个实现中的 issue 默认只有一个执行负责人
+- 多子代理并行时必须有明确边界和文件所有权
+
 ## 架构边界
 
 修改代码时遵守以下边界：
 
-- `web-llm-cli`
+- `imperial-desk-cli`
   - 只负责参数解析、命令分发、终端交互、输出格式
-- `web-llm-core`
+- `imperial-desk-core`
   - 只放共享类型、错误、trait、capability 契约
-- `web-llm-agent`
+- `imperial-desk-agent`
   - 只放 provider-agnostic agent 协调逻辑
-- `web-llm-browser`
+- `imperial-desk-browser`
   - 只放浏览器后端抽象和自动化能力
-- `web-llm-state`
+- `imperial-desk-state`
   - 只放本地状态路径、配置和持久化
-- `web-llm-provider`
+- `imperial-desk-provider`
   - 只放 provider 注册和厂商实现
 
-DeepSeek 的 DOM 选择器、页面逻辑、接口细节必须留在 `web-llm-provider` 中。
-不要把 provider 特定逻辑塞进 `web-llm-agent` 或 `web-llm-core`。
+DeepSeek 的 DOM 选择器、页面逻辑、接口细节必须留在 `imperial-desk-provider` 中。
+不要把 provider 特定逻辑塞进 `imperial-desk-agent` 或 `imperial-desk-core`。
 
 ## 实现规则
 
@@ -120,6 +138,47 @@ Rust 代码改动的最低验证要求：
 - 可以把有明确边界的探索、验证或局部实现分配给子 agent
 - 并行委派时避免重叠写文件
 - 子 agent 的发现需要回写到主 issue 的 workpad 或最终总结中
+
+### 开发接管规则
+
+对于进入实现阶段的 issue，默认流程不是“主 agent 亲自写全部代码”，而是：
+
+1. 主 agent 先同步 Plane issue、范围和验证要求。
+2. 主 agent 创建一个子代理，作为该 issue 的执行负责人。
+3. 子代理负责：
+   - 读取相关代码和文档
+   - 在授权范围内完成实现
+   - 运行最低限度验证
+   - 回报改动文件、结果和风险
+4. 主 agent 负责：
+   - 控制范围
+   - 复核子代理产出
+   - 必要时补充或修正实现
+   - 更新 Plane 与 git
+
+### 何时必须创建执行负责人子代理
+
+以下场景默认必须创建子代理：
+
+- 新功能开发
+- 中等以上规模重构
+- 需要跨多个 crate 的实现
+- 明确属于 Plane 中某个后续开发 issue 的工作
+
+以下场景可以不创建：
+
+- 纯文档同步
+- 轻量配置调整
+- 简单排障或信息核对
+- 只需极小改动的一次性修正
+
+### 子代理边界规则
+
+- 子代理必须拿到明确的 issue 范围
+- 子代理必须知道自己负责哪些文件或模块
+- 子代理不应随意扩展到未分配的 crate 或功能
+- 子代理不直接决定关闭 issue，关闭权在主 agent
+- 子代理完成后，主 agent 必须审阅再合并结果
 
 ## 本项目的优先级判断
 

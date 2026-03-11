@@ -8,11 +8,11 @@ use chromiumoxide::{
     Page,
 };
 use futures::StreamExt;
+use imperial_desk_core::{ProviderOptions, Result, WebLlmError};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::task::JoinHandle;
-use web_llm_core::{ProviderOptions, Result, WebLlmError};
 
 #[derive(Debug, Clone)]
 pub struct BrowserLaunchOptions {

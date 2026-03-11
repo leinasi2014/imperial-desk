@@ -1,7 +1,7 @@
 //! Provider-agnostic agent loop scaffold.
 
+use imperial_desk_core::{AskRequest, ProviderHandle, Result, WebLlmError};
 use serde::{Deserialize, Serialize};
-use web_llm_core::{AskRequest, ProviderHandle, Result, WebLlmError};
 
 const DEFAULT_MAX_STEPS: usize = 8;
 const DEFAULT_TIMEOUT_MS: u64 = 180_000;

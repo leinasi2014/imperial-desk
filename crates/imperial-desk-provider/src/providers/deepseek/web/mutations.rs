@@ -1,6 +1,6 @@
+use imperial_desk_browser::BrowserBackend;
+use imperial_desk_core::{Result, WebLlmError};
 use serde_json::Value;
-use web_llm_browser::BrowserBackend;
-use web_llm_core::{Result, WebLlmError};
 
 use crate::providers::deepseek::common::models::AuthorizedMutationResult;
 

@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use web_llm_core::{Result, WebLlmError};
-use web_llm_state::{
+use imperial_desk_core::{Result, WebLlmError};
+use imperial_desk_state::{
     clear_recent_session, load_recent_session, save_recent_session, RecentSessionRecord,
 };
 
