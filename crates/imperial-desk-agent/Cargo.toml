@@ -7,5 +7,10 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+serde_json.workspace = true
 serde.workspace = true
 imperial-desk-core = { path = "../imperial-desk-core" }
+
+[dev-dependencies]
+async-trait.workspace = true
+tokio.workspace = true

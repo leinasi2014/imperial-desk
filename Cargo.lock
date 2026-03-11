@@ -811,8 +811,11 @@ dependencies = [
 name = "imperial-desk-agent"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "imperial-desk-core",
  "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
