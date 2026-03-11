@@ -1,0 +1,16 @@
+[package]
+name = "web-llm-browser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+chromiumoxide.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+web-llm-core = { path = "../web-llm-core" }

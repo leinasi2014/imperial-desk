@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/web-llm-cli",
+    "crates/web-llm-core",
+    "crates/web-llm-agent",
+    "crates/web-llm-browser",
+    "crates/web-llm-state",
+    "crates/web-llm-provider",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.75"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+clap = { version = "4.5", features = ["derive"] }
+chromiumoxide = { version = "0.7.0", default-features = false, features = ["bytes", "tokio-runtime"] }
+dirs = "6"
+futures = "0.3"
+ratatui = "0.29"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
