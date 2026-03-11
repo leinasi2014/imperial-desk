@@ -41,22 +41,39 @@
 - 每个活跃 issue 保持一个持续更新的 `## Codex Workpad` 评论。
 - 新发现的超范围内容要新建 follow-up issue，不要悄悄并入当前 issue。
 
-## 负责人模型
+## 当前角色标准
 
-本项目把“负责人”拆成两个角色：
+本项目以 `WORKFLOW.md` 为角色标准，当前 Plane 侧约定为四层角色：
 
-- Plane 负责人
-  - 挂在 Plane 项目或 issue 上的人类账号
-  - 负责项目所有权、排期、状态和验收记录
-- 执行负责人
-  - 由主 agent 创建的子代理
-  - 负责接管某个开发 issue 的具体实现
+- 统筹角色
+  - `Coordinator`
+  - 当前对应 `徐阶`
+  - 负责 issue 路由、workpad、状态和交付就绪判断
+- 业务实现角色
+  - `Development Owner`
+  - 当前对应 `张居正`
+  - `In Progress` 阶段的 Plane assignee
+- 业务审查角色 A
+  - `Review Owner A`
+  - 当前对应 `海瑞`
+  - `Review` 阶段的第一条审查 assignee
+- 业务审查角色 B
+  - `Review Owner B`
+  - 当前对应 `于谦`
+  - `Review` 阶段的第二条审查 assignee
+
+执行层仍由子代理接管：
+
+- 开发子代理代表 `Development Owner` 执行实现和自验证
+- 审查子代理 A 代表 `Review Owner A` 执行独立审查
+- 审查子代理 B 代表 `Review Owner B` 执行独立审查
 
 约束：
 
+- 统筹角色不是默认开发 assignee，也不是默认审查 assignee
 - 不把虚拟成员直接写成 Plane 用户
 - 不让子代理直接替代 Plane 的项目所有权
-- 每个实现中的 issue 默认只有一个执行负责人
+- 每个实现中的 issue 默认只有一个开发执行负责人
 - 多子代理并行时必须有明确边界和文件所有权
 
 ## 架构边界
@@ -102,6 +119,7 @@ DeepSeek 的 DOM 选择器、页面逻辑、接口细节必须留在 `imperial-d
 - agent protocol
 - crate ownership
 - 本地状态模型
+- Plane 角色路由与工作流
 
 优先同步的文档：
 
@@ -109,10 +127,18 @@ DeepSeek 的 DOM 选择器、页面逻辑、接口细节必须留在 `imperial-d
 - `WORKFLOW.md`
 - `AGENTS.md`
 
+如果本次工作包含可复用的系统/环境/认证/追踪器维护操作，也必须同步更新对应 skill 或 runbook。
+
+- 尤其是本地 Plane 用户、成员、角色账号维护
+- 优先回写 `C:\Users\windo\.agents\skills\system-ops-runbook`
+- 目标是减少下次重复探索、降低出错率、降低 token 消耗
+
 ## 验证要求
 
 Rust 代码改动的最低验证要求：
 
+- `$code-review`
+- `$code-simplify`
 - `cargo fmt --check`
 - `cargo test`
 
@@ -144,17 +170,27 @@ Rust 代码改动的最低验证要求：
 对于进入实现阶段的 issue，默认流程不是“主 agent 亲自写全部代码”，而是：
 
 1. 主 agent 先同步 Plane issue、范围和验证要求。
-2. 主 agent 创建一个子代理，作为该 issue 的执行负责人。
-3. 子代理负责：
+2. 将 issue 指派给 `张居正`，并切到 `In Progress`。
+3. 主 agent 创建一个开发子代理，作为该 issue 的执行负责人。
+4. 开发子代理负责：
    - 读取相关代码和文档
    - 在授权范围内完成实现
    - 运行最低限度验证
    - 回报改动文件、结果和风险
-4. 主 agent 负责：
+5. 主 agent 负责：
    - 控制范围
    - 复核子代理产出
    - 必要时补充或修正实现
    - 更新 Plane 与 git
+
+### 审查接管规则
+
+进入审查阶段后：
+
+1. 将 issue 切到 `Review`，并路由给 `海瑞` 与 `于谦` 两条审查链路。
+2. 主 agent 创建两个互相独立的审查子代理执行 review。
+3. 任一审查子代理都可以提出阻塞性发现。
+4. 主 agent 负责处理回流、更新 workpad，并在双审查都非阻塞时才允许交付。
 
 ### 何时必须创建执行负责人子代理
 
@@ -196,3 +232,65 @@ Rust 代码改动的最低验证要求：
 4. login wizard 与二维码登录
 5. 测试覆盖和诊断
 6. `deepseek-api` 真正落地
+
+<!-- plane-role-orchestration:begin -->
+## Plane Role Orchestration Rules
+
+This managed section is maintained by the user-level skill
+`plane-role-orchestration`.
+
+Keep repo-specific architecture, module ownership, and product details outside
+this section, but keep execution policy here aligned with `WORKFLOW.md`.
+
+### Source Of Truth
+
+- Plane is the primary tracker.
+- `WORKFLOW.md` defines state flow, role routing, and runner defaults.
+- This file defines repo-local agent behavior, execution guardrails, and delivery discipline.
+- If `WORKFLOW.md` and this section diverge, update both in the same change.
+
+### Role Separation
+
+- `Coordinator` routes work, maintains the workpad, and checks delivery readiness.
+- `Development Owner` owns implementation and self-validation.
+- `Review Owner A` and `Review Owner B` are independent review lanes.
+- Do not let the coordinator silently perform development or review work unless the repo explicitly allows it.
+
+### Plane Protocol
+
+- Do not start implementation without a corresponding Plane issue.
+- Keep one persistent `## Codex Workpad` comment per active issue.
+- Mirror `Scope`, `Acceptance Criteria`, and `Validation` into that workpad before editing.
+- Record handoffs, review outcomes, blockers, and validation evidence in the same workpad.
+
+### Development Owner Rules
+
+- Keep changes scoped to the active issue.
+- Before self-validation, run `$code-review` against the implementation diff.
+- Apply or explicitly disposition review findings before continuing.
+- Run `$code-simplify` on the same scope after review findings are handled.
+- Re-run the narrow validation needed to prove the simplification pass preserved behavior.
+- Only hand the issue to review after current validation evidence exists.
+
+### Review Gate
+
+- Treat Review A and Review B as independent checks.
+- If either review lane requests changes, route the issue back to implementation.
+- Do not mark work ready for delivery until all required review lanes are non-blocking.
+- Do not close or land work when tracker state, workpad state, validation, and git state disagree.
+
+### Worktree And Git Hygiene
+
+- Start from a clean or issue-scoped worktree.
+- Do not mix unrelated issue work in the same branch, commit, or worktree.
+- Before committing, verify the staged diff matches the active issue only.
+- Prefer repo-local git skills when available: `$pull`, `$commit`, `$push`, `$land`.
+- Do not rewrite or discard unrelated local changes without explicit approval.
+
+### Docs And Validation
+
+- Update `WORKFLOW.md`, `AGENTS.md`, and relevant design docs when behavior, interfaces, ownership, or delivery policy changes.
+- Run the narrowest validation that proves the touched behavior is correct.
+- If validation is skipped, record the reason in the workpad and final summary.
+- Create follow-up Plane issues for meaningful scope growth instead of silently widening the current issue.
+<!-- plane-role-orchestration:end -->
