@@ -1,6 +1,8 @@
 //! Provider-agnostic agent loop scaffold.
 
-use imperial_desk_core::{AskRequest, ProviderHandle, Result, WebLlmError};
+use imperial_desk_core::{
+    AskRequest, AskResponse, ProviderHandle, Result, SessionMode, WebLlmError,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -69,6 +71,27 @@ struct ToolCallResult<'a> {
     error: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionContinuity {
+    Preserved,
+    Missing,
+    Switched,
+}
+
+impl SessionContinuity {
+    fn notice(self) -> Option<&'static str> {
+        match self {
+            Self::Preserved => None,
+            Self::Missing => Some(
+                "Session continuity is unavailable for this follow-up. Treat the task and supplied state below as the full authoritative context.",
+            ),
+            Self::Switched => Some(
+                "The provider switched to a new chat session for this follow-up. Treat the task and supplied state below as the full authoritative context.",
+            ),
+        }
+    }
+}
+
 impl<'a> WebLlmAgent<'a> {
     #[must_use]
     pub fn new(provider: &'a mut dyn ProviderHandle, options: AgentOptions) -> Self {
@@ -76,7 +99,8 @@ impl<'a> WebLlmAgent<'a> {
     }
 
     pub async fn run(&mut self, task: &str, session_id: Option<String>) -> Result<AgentRunResult> {
-        if task.trim().is_empty() {
+        let task = task.trim();
+        if task.is_empty() {
             return Err(WebLlmError::InvalidInput("agent task is empty".to_owned()));
         }
         if self.options.max_steps == 0 {
@@ -89,22 +113,22 @@ impl<'a> WebLlmAgent<'a> {
         let mut next_prompt = build_initial_protocol_prompt(task);
 
         for step in 1..=self.options.max_steps {
+            let requested_session_id = active_session_id.clone();
             let response = self
                 .provider
                 .ask(
                     &next_prompt,
                     AskRequest {
-                        session_id: active_session_id.clone(),
+                        session_id: requested_session_id.clone(),
                         thinking_enabled: self.options.thinking_enabled,
                         search_enabled: self.options.search_enabled,
                         timeout_ms: Some(self.options.timeout_ms),
                     },
                 )
                 .await?;
-
-            if response.chat_session_id.is_some() {
-                active_session_id = response.chat_session_id.clone();
-            }
+            let session_continuity =
+                determine_session_continuity(requested_session_id.as_deref(), &response);
+            update_active_session_id(&mut active_session_id, &response);
 
             let raw_response = response.response.unwrap_or_default();
             match parse_protocol_message(&raw_response) {
@@ -123,10 +147,17 @@ impl<'a> WebLlmAgent<'a> {
                     arguments,
                     reason,
                 }) => {
-                    next_prompt = build_tool_result_prompt(&tool, &arguments, reason.as_deref())?;
+                    next_prompt = build_tool_result_prompt(
+                        task,
+                        &tool,
+                        &arguments,
+                        reason.as_deref(),
+                        session_continuity,
+                    )?;
                 }
                 Err(_) if step < self.options.max_steps => {
-                    next_prompt = build_protocol_repair_prompt(&raw_response);
+                    next_prompt =
+                        build_protocol_repair_prompt(task, &raw_response, session_continuity);
                 }
                 Err(error) => {
                     return Err(error);
@@ -145,13 +176,42 @@ fn build_initial_protocol_prompt(task: &str) -> String {
     format!("{AGENT_PROTOCOL_SPEC}\n\nTask:\n{task}")
 }
 
-fn build_protocol_repair_prompt(previous_response: &str) -> String {
+fn build_follow_up_protocol_prompt(
+    task: &str,
+    session_continuity: SessionContinuity,
+    follow_up: String,
+) -> String {
+    let session_notice = session_continuity
+        .notice()
+        .map(|notice| format!("Session notice:\n{notice}\n\n"))
+        .unwrap_or_default();
+
     format!(
-        "{AGENT_PROTOCOL_SPEC}\n\nYour previous response was not valid protocol JSON.\nReturn a corrected JSON object only.\n\nPrevious response:\n{previous_response}"
+        "{AGENT_PROTOCOL_SPEC}\n\nContinue working on the same task.\nTask:\n{task}\n\n{session_notice}{follow_up}"
     )
 }
 
-fn build_tool_result_prompt(tool: &str, arguments: &Value, reason: Option<&str>) -> Result<String> {
+fn build_protocol_repair_prompt(
+    task: &str,
+    previous_response: &str,
+    session_continuity: SessionContinuity,
+) -> String {
+    build_follow_up_protocol_prompt(
+        task,
+        session_continuity,
+        format!(
+            "Your previous response was not valid protocol JSON.\nReturn a corrected JSON object only.\n\nPrevious response:\n{previous_response}"
+        ),
+    )
+}
+
+fn build_tool_result_prompt(
+    task: &str,
+    tool: &str,
+    arguments: &Value,
+    reason: Option<&str>,
+    session_continuity: SessionContinuity,
+) -> Result<String> {
     let tool_result = ToolCallResult {
         r#type: "tool_result",
         tool,
@@ -165,9 +225,41 @@ fn build_tool_result_prompt(tool: &str, arguments: &Value, reason: Option<&str>)
         .map(|value| format!("\nReason:\n{value}"))
         .unwrap_or_default();
 
-    Ok(format!(
-        "{AGENT_PROTOCOL_SPEC}\n\nYour previous response requested a tool call.{reason_line}\nUse this tool result and continue.\n{tool_result_json}"
+    Ok(build_follow_up_protocol_prompt(
+        task,
+        session_continuity,
+        format!(
+            "Your previous response requested a tool call.{reason_line}\nUse this tool result and continue.\n{tool_result_json}"
+        ),
     ))
+}
+
+fn determine_session_continuity(
+    requested_session_id: Option<&str>,
+    response: &AskResponse,
+) -> SessionContinuity {
+    if response.session_mode == SessionMode::New && requested_session_id.is_some() {
+        return SessionContinuity::Switched;
+    }
+
+    match (requested_session_id, response.chat_session_id.as_deref()) {
+        (_, None) => SessionContinuity::Missing,
+        (Some(requested), Some(actual)) if actual != requested => SessionContinuity::Switched,
+        _ => SessionContinuity::Preserved,
+    }
+}
+
+fn update_active_session_id(active_session_id: &mut Option<String>, response: &AskResponse) {
+    match response.session_mode {
+        SessionMode::New => {
+            *active_session_id = response.chat_session_id.clone();
+        }
+        SessionMode::Continue => {
+            if let Some(chat_session_id) = response.chat_session_id.as_ref() {
+                *active_session_id = Some(chat_session_id.clone());
+            }
+        }
+    }
 }
 
 fn parse_protocol_message(raw_response: &str) -> Result<AgentProtocolMessage> {
@@ -254,6 +346,7 @@ mod tests {
     struct ScriptedProvider {
         responses: VecDeque<AskResponse>,
         prompts: Mutex<Vec<String>>,
+        requests: Mutex<Vec<AskRequest>>,
     }
 
     impl ScriptedProvider {
@@ -261,21 +354,33 @@ mod tests {
             Self {
                 responses: responses.into(),
                 prompts: Mutex::new(Vec::new()),
+                requests: Mutex::new(Vec::new()),
             }
         }
 
         fn prompts(&self) -> Vec<String> {
             self.prompts.lock().expect("prompt mutex poisoned").clone()
         }
+
+        fn requests(&self) -> Vec<AskRequest> {
+            self.requests
+                .lock()
+                .expect("request mutex poisoned")
+                .clone()
+        }
     }
 
     #[async_trait]
     impl WebLlmProvider for ScriptedProvider {
-        async fn ask(&mut self, prompt: &str, _request: AskRequest) -> Result<AskResponse> {
+        async fn ask(&mut self, prompt: &str, request: AskRequest) -> Result<AskResponse> {
             self.prompts
                 .lock()
                 .expect("prompt mutex poisoned")
                 .push(prompt.to_owned());
+            self.requests
+                .lock()
+                .expect("request mutex poisoned")
+                .push(request);
             self.responses.pop_front().ok_or_else(|| {
                 WebLlmError::InvalidInput("scripted provider ran out of responses".to_owned())
             })
@@ -330,11 +435,15 @@ mod tests {
         }
     }
 
-    fn scripted_response(chat_session_id: &str, response: &str) -> AskResponse {
+    fn scripted_response(
+        chat_session_id: Option<&str>,
+        session_mode: SessionMode,
+        response: &str,
+    ) -> AskResponse {
         AskResponse {
-            chat_session_id: Some(chat_session_id.to_owned()),
+            chat_session_id: chat_session_id.map(str::to_owned),
             response: Some(response.to_owned()),
-            session_mode: SessionMode::Continue,
+            session_mode,
             ..AskResponse::default()
         }
     }
@@ -354,7 +463,8 @@ mod tests {
     #[tokio::test]
     async fn run_returns_final_answer_from_protocol_response() {
         let responses = vec![scripted_response(
-            "session-1",
+            Some("session-1"),
+            SessionMode::Continue,
             "{\"type\":\"final\",\"answer\":\"done\"}",
         )];
         let mut provider = ScriptedProvider::from_responses(responses);
@@ -375,11 +485,13 @@ mod tests {
     async fn run_handles_tool_call_and_feeds_back_tool_result() {
         let responses = vec![
             scripted_response(
-                "session-1",
+                Some("session-1"),
+                SessionMode::Continue,
                 "{\"type\":\"tool_call\",\"tool\":\"shell\",\"arguments\":{\"command\":\"pwd\"},\"reason\":\"inspect cwd\"}",
             ),
             scripted_response(
-                "session-1",
+                Some("session-1"),
+                SessionMode::Continue,
                 "{\"type\":\"final\",\"answer\":\"tool unavailable, stopping\"}",
             ),
         ];
@@ -401,8 +513,12 @@ mod tests {
     #[tokio::test]
     async fn run_repairs_invalid_protocol_response() {
         let responses = vec![
-            scripted_response("session-1", "not valid json"),
-            scripted_response("session-1", "{\"type\":\"final\",\"answer\":\"repaired\"}"),
+            scripted_response(None, SessionMode::Continue, "not valid json"),
+            scripted_response(
+                Some("session-1"),
+                SessionMode::Continue,
+                "{\"type\":\"final\",\"answer\":\"repaired\"}",
+            ),
         ];
         let mut provider = ScriptedProvider::from_responses(responses);
         let mut agent = WebLlmAgent::new(&mut provider, AgentOptions::default());
@@ -422,7 +538,8 @@ mod tests {
     #[tokio::test]
     async fn run_errors_when_max_steps_is_exhausted() {
         let responses = vec![scripted_response(
-            "session-1",
+            Some("session-1"),
+            SessionMode::Continue,
             "{\"type\":\"tool_call\",\"tool\":\"shell\",\"arguments\":{\"command\":\"pwd\"}}",
         )];
         let mut provider = ScriptedProvider::from_responses(responses);
@@ -442,5 +559,95 @@ mod tests {
         assert!(
             matches!(error, WebLlmError::InvalidInput(message) if message.contains("final answer within 1 steps"))
         );
+    }
+
+    #[tokio::test]
+    async fn run_restates_task_after_tool_call_when_chat_session_id_is_missing() {
+        let responses = vec![
+            scripted_response(
+                None,
+                SessionMode::Continue,
+                "{\"type\":\"tool_call\",\"tool\":\"shell\",\"arguments\":{\"command\":\"pwd\"},\"reason\":\"inspect cwd\"}",
+            ),
+            scripted_response(
+                None,
+                SessionMode::Continue,
+                "{\"type\":\"final\",\"answer\":\"tool unavailable, stopping\"}",
+            ),
+        ];
+        let mut provider = ScriptedProvider::from_responses(responses);
+        let mut agent = WebLlmAgent::new(&mut provider, AgentOptions::default());
+
+        let result = agent
+            .run("inspect cwd", None)
+            .await
+            .expect("run should succeed");
+        let prompts = provider.prompts();
+        let requests = provider.requests();
+
+        assert_eq!(result.final_answer, "tool unavailable, stopping");
+        assert_eq!(requests[1].session_id, None);
+        assert!(prompts[1].contains("Continue working on the same task."));
+        assert!(prompts[1].contains("Task:\ninspect cwd"));
+        assert!(prompts[1].contains("Session continuity is unavailable"));
+        assert!(prompts[1].contains("\"type\": \"tool_result\""));
+    }
+
+    #[tokio::test]
+    async fn run_restates_task_on_repair_when_session_id_is_missing() {
+        let responses = vec![
+            scripted_response(None, SessionMode::Continue, "not valid json"),
+            scripted_response(
+                Some("session-1"),
+                SessionMode::Continue,
+                "{\"type\":\"final\",\"answer\":\"repaired\"}",
+            ),
+        ];
+        let mut provider = ScriptedProvider::from_responses(responses);
+        let mut agent = WebLlmAgent::new(&mut provider, AgentOptions::default());
+
+        let result = agent
+            .run("repair response", Some("session-1".to_owned()))
+            .await
+            .expect("run should succeed");
+        let prompts = provider.prompts();
+        let requests = provider.requests();
+
+        assert_eq!(result.final_answer, "repaired");
+        assert_eq!(requests[1].session_id.as_deref(), Some("session-1"));
+        assert!(prompts[1].contains("Task:\nrepair response"));
+        assert!(prompts[1].contains("Session continuity is unavailable"));
+        assert!(prompts[1].contains("Previous response:\nnot valid json"));
+    }
+
+    #[tokio::test]
+    async fn run_clears_requested_session_after_explicit_session_switch() {
+        let responses = vec![
+            scripted_response(
+                None,
+                SessionMode::New,
+                "{\"type\":\"tool_call\",\"tool\":\"shell\",\"arguments\":{\"command\":\"pwd\"}}",
+            ),
+            scripted_response(
+                None,
+                SessionMode::Continue,
+                "{\"type\":\"final\",\"answer\":\"continued in a new session\"}",
+            ),
+        ];
+        let mut provider = ScriptedProvider::from_responses(responses);
+        let mut agent = WebLlmAgent::new(&mut provider, AgentOptions::default());
+
+        let result = agent
+            .run("inspect cwd", Some("session-1".to_owned()))
+            .await
+            .expect("run should succeed");
+        let prompts = provider.prompts();
+        let requests = provider.requests();
+
+        assert_eq!(result.final_answer, "continued in a new session");
+        assert_eq!(requests[0].session_id.as_deref(), Some("session-1"));
+        assert_eq!(requests[1].session_id, None);
+        assert!(prompts[1].contains("Task:\ninspect cwd"));
+        assert!(prompts[1].contains("provider switched to a new chat session"));
     }
 }
